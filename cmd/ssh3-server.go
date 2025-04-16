@@ -492,7 +492,6 @@ func newSubsystemReq(user *unix_util.User, channel ssh3.Channel, request ssh3Mes
 }
 
 func newWindowChangeReq(user *unix_util.User, channel ssh3.Channel, request ssh3Messages.WindowChangeRequest, wantReply bool) error {
-	log.Info().Msgf("WindowChange Request: %v", request)
 	session, ok := runningSessions.Get(channel)
 	if !ok {
 		return fmt.Errorf("cannot find session for current channel")
