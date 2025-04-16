@@ -47,6 +47,7 @@ func (v *PubkeyJWTIdentityVerifier) Verify(request *http.Request, base64Conversa
 		jwt.WithSubject("ssh3"),
 		jwt.WithIssuedAt(),
 		jwt.WithAudience("unused"),
+		jwt.WithLeeway(60 * time.Second),
 		jwt.WithValidMethods([]string{"RS256", "EdDSA", "ES256"}))
 	if err != nil || !token.Valid {
 		log.Error().Msgf("invalid private key token: %s", err)
