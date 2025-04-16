@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -589,12 +590,34 @@ func (c *Client) RunSession(tty *os.File, forwardSSHAgent bool, command ...strin
 		return err
 	}
 
+	sendLock := &sync.Mutex{}
+
+	go func() {
+		if term.IsTerminal(int(tty.Fd())) {
+			for ws := range winsize.MonWinsize(tty) {
+				sendLock.Lock()
+				channel.SendRequest(&ssh3Messages.ChannelRequestMessage{
+					WantReply: false,
+					ChannelRequest: &ssh3Messages.WindowChangeRequest{
+						CharWidth:   uint64(ws.NCols),
+						CharHeight:  uint64(ws.NRows),
+						PixelWidth:  uint64(ws.PixelWidth),
+						PixelHeight: uint64(ws.PixelHeight),
+					},
+				})
+				sendLock.Unlock()
+			}
+		}
+	}()
+
 	go func() {
 		buf := make([]byte, channel.MaxPacketSize())
 		for {
 			n, err := os.Stdin.Read(buf)
 			if n > 0 {
+				sendLock.Lock()
 				_, err2 := channel.WriteData(buf[:n], ssh3Messages.SSH_EXTENDED_DATA_NONE)
+				sendLock.Unlock()
 				if err2 != nil {
 					fmt.Fprintf(os.Stderr, "could not write data on channel: %+v", err2)
 					return
