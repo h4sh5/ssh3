@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"time"
 
 	"github.com/francoismichel/ssh3/util"
 	"golang.org/x/exp/slices"
@@ -201,12 +202,37 @@ func (c *Conversation) EstablishClientConversation(req *http.Request, roundTripp
 					log.Error().Msgf("could not read conv id from datagram on conv %d: %s", c.controlStream.StreamID(), err)
 					return
 				}
+				/*
 				if convID == uint64(c.controlStream.StreamID()) {
 					err = c.AddDatagram(c.Context(), dgram[buf.Size()-int64(buf.Len()):])
 					if err != nil {
 						log.Error().Msgf("could not add datagram to conv id %d: %s", c.controlStream.StreamID(), err)
 						return
 					}
+				*/
+				//TODO: Dirty hack: there is a small race condition in "forwardings := make(map[string]ssh3.Channel)" in ssh3-server.go function handleUDPReverseForwardingChannel() and client.go function ForwardUDP()
+				//Responses seem to be addressed before the channel is properly set up, so an error occurrs.
+				//Some retries seem to fix the problem
+				if convID == uint64(c.controlStream.StreamID()) {
+					maxRetries := 10
+					for attempt := 1; attempt <= maxRetries; attempt++ {
+						err = c.AddDatagram(c.Context(), dgram[buf.Size()-int64(buf.Len()):])
+						if err == nil {
+							break // Success, exit the retry loop
+						}
+						if attempt < maxRetries {
+							log.Warn().Msgf("Attempt %d: could not add datagram to conv id %d: %s. Retrying...", attempt, c.controlStream.StreamID(), err)
+							time.Sleep(100 * time.Millisecond) // Wait before retrying
+						} else {
+							log.Error().Msgf("Attempt %d: could not add datagram to conv id %d: %s. No more retries left.", attempt, c.controlStream.StreamID(), err)
+							return
+						}
+					}
+				
+
+
+
+
 				} else {
 					log.Error().Msgf("discarding datagram with invalid conv id %d", convID)
 				}
@@ -321,6 +347,20 @@ func (c *Conversation) RequestTCPReverseChannel(maxPacketSize uint64, datagramsQ
 	return &TCPForwardingChannelImpl{Channel: channel, RemoteAddr: remoteAddr}, nil
 
 }
+func (c *Conversation) RequestUDPReverseChannel(maxPacketSize uint64, datagramsQueueSize uint64, localAddr *net.UDPAddr, remoteAddr *net.UDPAddr) (Channel, error) {
+	str, err := c.streamCreator.OpenStream()
+	if err != nil {
+		return nil, err
+	}
+
+	additionalBytes := buildRequestUDPReverseChannelAdditionalBytes(localAddr.IP, uint16(localAddr.Port), remoteAddr.IP, uint16(remoteAddr.Port))
+
+	channel := NewChannel(uint64(c.controlStream.StreamID()), c.conversationID, uint64(str.StreamID()), "request-reverse-udp", maxPacketSize, &StreamByteReader{str}, str, nil, c.channelsManager, true, true, false, datagramsQueueSize, additionalBytes)
+	channel.maybeSendHeader()
+	c.channelsManager.addChannel(channel)
+	return &UDPForwardingChannelImpl{Channel: channel, RemoteAddr: remoteAddr}, nil
+
+}
 func (c *Conversation) OpenTCPReverseForwardingChannel(maxPacketSize uint64, datagramsQueueSize uint64, remoteAddr *net.TCPAddr) (Channel, error) {
 
 	str, err := c.streamCreator.OpenStream()
@@ -332,6 +372,21 @@ func (c *Conversation) OpenTCPReverseForwardingChannel(maxPacketSize uint64, dat
 	c.channelsManager.addChannel(channel)
 	return &TCPOpenReverseForwardingChannelImpl{Channel: channel, RemoteAddr: remoteAddr}, nil
 }
+
+func (c *Conversation) OpenUDPReverseForwardingChannel(maxPacketSize uint64, datagramsQueueSize uint64, remoteAddr *net.UDPAddr) (Channel, error) {
+
+	str, err := c.streamCreator.OpenStream()
+	if err != nil {
+		return nil, err
+	}
+	channel := NewChannel(uint64(c.controlStream.StreamID()), c.conversationID, uint64(str.StreamID()), "open-request-reverse-udp", maxPacketSize, &StreamByteReader{str}, str, nil, c.channelsManager, true, true, false, datagramsQueueSize, nil)
+	channel.setDatagramSender(c.getDatagramSenderForChannel(channel.ChannelID()))
+	channel.maybeSendHeader()
+	c.channelsManager.addChannel(channel)
+	return &UDPOpenReverseForwardingChannelImpl{Channel: channel, RemoteAddr: remoteAddr}, nil
+}
+
+
 func (c *Conversation) AcceptChannel(ctx context.Context) (Channel, error) {
 	for {
 		if channel := c.channelsAcceptQueue.Next(); channel != nil {

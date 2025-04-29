@@ -94,7 +94,7 @@ func setupQUICConnection(ctx context.Context, skipHostVerification bool, keylog 
 
 	var qconf quic.Config
 
-	qconf.MaxIncomingStreams = 10
+	qconf.MaxIncomingStreams = 1000
 	qconf.Allow0RTT = true
 	qconf.EnableDatagrams = true
 	qconf.KeepAlivePeriod = 1 * time.Second
@@ -327,6 +327,7 @@ func ClientMain() int {
 	forwardUDP := flag.String("forward-udp", "", "if set, take a localport/remoteip@remoteport forwarding localhost@localport towards remoteip@remoteport")
 	forwardTCP := flag.String("forward-tcp", "", "if set, take a localport/remoteip@remoteport forwarding localhost@localport towards remoteip@remoteport")
 	reverseTCP := flag.String("reverse-tcp", "", "if set, take a remoteip@remoteport reverse forwarding it towards a localport/remoteip@remoteport")
+	reverseUDP := flag.String("reverse-udp", "", "if set, take a remoteip@remoteport reverse forwarding it towards a localport/remoteip@remoteport")
 	proxyJump := flag.String("proxy-jump", "", "if set, performs a proxy jump using the specified remote host as proxy (requires server with version >= 0.1.5)")
 	flag.Parse()
 	args := flag.Args()
@@ -440,7 +441,7 @@ func ClientMain() int {
 	if *reverseTCP != "" {
 		localPort, remoteIP, remotePort, err := parseAddrPort(*reverseTCP)
 		if err != nil {
-			log.Error().Msgf("UDP reverse parsing error %s", err)
+			log.Error().Msgf("TCP reverse parsing error %s", err)
 		}
 		remoteTCPAddr = &net.TCPAddr{
 			IP:   remoteIP,
@@ -453,6 +454,31 @@ func ClientMain() int {
 			}
 		} else if remoteIP.To16() != nil {
 			localTCPAddr = &net.TCPAddr{
+				IP:   net.IPv6loopback,
+				Port: localPort,
+			}
+		} else {
+			log.Error().Msgf("Unrecognized IP length %d", len(remoteIP))
+			return -1
+		}
+	}
+
+	if *reverseUDP != "" {
+		localPort, remoteIP, remotePort, err := parseAddrPort(*reverseUDP)
+		if err != nil {
+			log.Error().Msgf("UDP reverse parsing error %s", err)
+		}
+		remoteUDPAddr = &net.UDPAddr{
+			IP:   remoteIP,
+			Port: remotePort,
+		}
+		if remoteIP.To4() != nil {
+			localUDPAddr = &net.UDPAddr{
+				IP:   net.IPv4(127, 0, 0, 1),
+				Port: localPort,
+			}
+		} else if remoteIP.To16() != nil {
+			localUDPAddr = &net.UDPAddr{
 				IP:   net.IPv6loopback,
 				Port: localPort,
 			}
@@ -681,12 +707,20 @@ func ClientMain() int {
 	if *reverseTCP != "" && localTCPAddr != nil && remoteTCPAddr != nil {
 		_, err := c.ReverseTCP(ctx, localTCPAddr, remoteTCPAddr)
 		if err != nil {
+			log.Error().Msgf("could not reverse TCP: %s", err)
+			return -1
+		}
+	}
+
+	if *reverseUDP != "" && localUDPAddr != nil && remoteUDPAddr != nil {
+		_, err := c.ReverseUDP(ctx, localUDPAddr, remoteUDPAddr)
+		if err != nil {
 			log.Error().Msgf("could not reverse UDP: %s", err)
 			return -1
 		}
 	}
 
-	if localUDPAddr != nil && remoteUDPAddr != nil {
+	if *forwardUDP != "" && localUDPAddr != nil && remoteUDPAddr != nil {
 		_, err := c.ForwardUDP(ctx, localUDPAddr, remoteUDPAddr)
 		if err != nil {
 			log.Error().Msgf("could not forward UDP: %s", err)

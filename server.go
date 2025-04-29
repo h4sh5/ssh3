@@ -104,6 +104,14 @@ func NewServer(maxPacketSize uint64, defaultDatagramQueueSize uint64, h3Server *
 
 			//tcpAddrLocal: Local socket within the server machine where will be proxied a local service at reach of the ssh3 client
 			//tcpAddrRemote: The remote socket at reach of the SSH3 client to be proxied within the machine hosting the ssh3 server
+
+		case "request-reverse-udp":
+			tcpAddrLocal, tcpAddrRemote, err := parseUDPRequestReverseHeader(channelInfo.ChannelID, &StreamByteReader{stream})
+			if err != nil {
+				return false, err
+			}
+
+			newChannel = &UDPReverseForwardingChannelImpl{Channel: newChannel, RemoteAddr: tcpAddrRemote, LocalAddr: tcpAddrLocal}
 		}
 		conversation.channelsAcceptQueue.Add(newChannel)
 		return true, nil

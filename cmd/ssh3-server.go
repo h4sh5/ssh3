@@ -629,6 +629,7 @@ func handleTCPForwardingChannel(ctx context.Context, user *unix_util.User, conv 
 	return nil
 }
 
+//Copied from client.go ForwardTCP()
 func handleTCPReverseForwardingChannel(ctx context.Context, user *unix_util.User, conv *ssh3.Conversation, channel *ssh3.TCPReverseForwardingChannelImpl) error {
 	conn, err := net.ListenTCP("tcp", channel.LocalAddr)
 	if err != nil {
@@ -654,6 +655,60 @@ func handleTCPReverseForwardingChannel(ctx context.Context, user *unix_util.User
 	}()
 	return nil
 }
+
+
+//Copied from client.go ForwardUDP()
+func handleUDPReverseForwardingChannel(ctx context.Context, user *unix_util.User, conv *ssh3.Conversation, ch *ssh3.UDPReverseForwardingChannelImpl) error {
+	conn, err := net.ListenUDP("udp", ch.LocalAddr)
+	if err != nil {
+		log.Error().Msgf("could not listen on UDP socket: %s", err)
+		return nil
+	}
+	forwardings := make(map[string]ssh3.Channel)
+	go func() {
+		buf := make([]byte, 1500)
+		for {
+			n, addr, err := conn.ReadFromUDP(buf)
+			if err != nil {
+				log.Error().Msgf("could not read on UDP socket: %s", err)
+				return
+			}
+			channel, ok := forwardings[addr.String()]
+			if !ok {
+				channel, err = conv.OpenUDPReverseForwardingChannel(30000, 10, ch.RemoteAddr)
+				if err != nil {
+					log.Error().Msgf("could not open new UDP reverse forwarding channel: %s", err)
+					return
+				}
+				forwardings[addr.String()] = channel
+				go func() {
+					for {
+						dgram, err := channel.ReceiveDatagram(ctx)
+						if err != nil {
+							log.Error().Msgf("could not receive datagram on channel: %s", err)
+							return
+						}
+						_, err = conn.WriteToUDP(dgram, addr)
+						if err != nil {
+							log.Error().Msgf("could not write datagram on socket: %s", err)
+							return
+						}
+					}
+				}()
+			}
+			err = channel.SendDatagram(buf[:n])
+			if err != nil {
+				log.Error().Msgf("could not send datagram: %s", err)
+				return
+			}
+		}
+	}()
+	return nil
+}
+
+
+
+
 
 func newDataReq(user *unix_util.User, channel ssh3.Channel, request ssh3Messages.DataOrExtendedDataMessage) error {
 	runningSession, ok := runningSessions.Get(channel)
@@ -961,6 +1016,8 @@ func ServerMain() int {
 				handleTCPForwardingChannel(conv.Context(), authenticatedUser, conv, c)
 			case *ssh3.TCPReverseForwardingChannelImpl:
 				handleTCPReverseForwardingChannel(conv.Context(), authenticatedUser, conv, c)
+			case *ssh3.UDPReverseForwardingChannelImpl:
+				handleUDPReverseForwardingChannel(conv.Context(), authenticatedUser, conv, c)
 			default:
 				runningSessions.Insert(channel, &runningSession{
 					channelState: LARVAL,

@@ -285,6 +285,52 @@ func forwardReverseTCPInBackground(ctx context.Context, channel ssh3.Channel, co
 	}()
 }
 
+func forwardReverseUDPInBackground(ctx context.Context, channel ssh3.Channel, conn *net.UDPConn) {
+	go func() {
+		defer conn.Close()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			datagram, err := channel.ReceiveDatagram(ctx)
+			if err != nil {
+				log.Error().Msgf("could not receive datagram: %s", err)
+				return
+			}
+			_, err = conn.Write(datagram)
+			if err != nil {
+				log.Error().Msgf("could not write datagram on UDP socket: %s", err)
+				return
+			}
+		}
+	}()
+
+	go func() {
+		defer channel.Close()
+		defer conn.Close()
+		buf := make([]byte, 1500)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			n, err := conn.Read(buf)
+			if err != nil {
+				log.Error().Msgf("could read datagram on UDP socket: %s", err)
+				return
+			}
+			err = channel.SendDatagram(buf[:n])
+			if err != nil {
+				log.Error().Msgf("could send datagram on channel: %s", err)
+				return
+			}
+		}
+	}()
+}
+
 type Client struct {
 	qconn quic.EarlyConnection
 	*ssh3.Conversation
@@ -305,7 +351,7 @@ func Dial(ctx context.Context, options *Options, qconn quic.EarlyConnection,
 
 	var qconf quic.Config
 
-	qconf.MaxIncomingStreams = 10
+	qconf.MaxIncomingStreams = 1000
 	qconf.Allow0RTT = true
 	qconf.EnableDatagrams = true
 	qconf.KeepAlivePeriod = 1 * time.Second
@@ -565,6 +611,40 @@ func (c *Client) ReverseTCP(ctx context.Context, localTCPAddr *net.TCPAddr, remo
 	}()
 	forwardingChannel.Close()
 	return remoteTCPAddr, nil
+}
+
+func (c *Client) ReverseUDP(ctx context.Context, localUDPAddr *net.UDPAddr, remoteUDPAddr *net.UDPAddr) (*net.UDPAddr, error) {
+	log.Debug().Msgf("start UDP reverse forwarding from %s to %s", localUDPAddr, remoteUDPAddr)
+
+	forwardingChannel, err := c.RequestUDPReverseChannel(30000, 10, localUDPAddr, remoteUDPAddr)
+	if err != nil {
+		log.Error().Msgf("could open new UDP reverse forwarding channel: %s", err)
+		return remoteUDPAddr, nil
+	}
+
+	go func() {
+		for {
+			channel, err := c.AcceptChannel(c.Context())
+			if err != nil {
+				log.Debug().Msgf("Error accepting channel")
+			}
+			switch channel.ChannelType() {
+			case "open-request-reverse-udp":
+				log.Debug().Msgf("start reverse UDP forwarding from %s to %s", localUDPAddr, remoteUDPAddr)
+				conn, err := net.DialUDP("udp", nil, remoteUDPAddr)
+				if err != nil {
+					return
+				}
+				forwardReverseUDPInBackground(ctx, channel, conn)
+				if err != nil {
+					channel.Close()
+					return
+				}
+			}
+		}
+	}()
+	forwardingChannel.Close()
+	return remoteUDPAddr, nil
 }
 
 func (c *Client) RunSession(tty *os.File, forwardSSHAgent bool, command ...string) error {
