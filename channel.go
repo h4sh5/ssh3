@@ -119,6 +119,7 @@ type channelImpl struct {
 
 type UDPForwardingChannelImpl struct {
 	RemoteAddr *net.UDPAddr
+	LocalAddr  *net.UDPAddr
 	Channel
 }
 
@@ -146,6 +147,7 @@ type UDPReverseForwardingChannelImpl struct {
 
 type UDPOpenReverseForwardingChannelImpl struct {
 	RemoteAddr *net.UDPAddr
+	LocalAddr *net.UDPAddr
 	Channel
 }
 func buildHeader(conversationStreamID uint64, channelType string, maxPacketSize uint64, additionalBytes []byte) []byte {
