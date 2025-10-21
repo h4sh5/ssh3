@@ -286,3 +286,31 @@ We currently consider removing the need of setting the client_id in the `authori
 It is often the case that some SSH hosts can only be accessed through a gateway. SSH3 allows you to perform a Proxy Jump similarly to what is proposed by OpenSSH.
 You can connect from A to C using B as a gateway/proxy. B and C must both be running a valid SSH3 server. This works by establishing UDP port forwarding on B to forward QUIC packets from A to C.
 The connection from A to C is therefore fully end-to-end and B cannot decrypt or alter the SSH3 traffic between A and C.
+
+
+#### Local port forwarding
+
+Suppose you have a HTTP server on localhost port 3000 on the remote host, and wants to forward that locally to port 8080 so that you can access it via your browser. Do this with:
+
+`ssh3 -forward-tcp 8080/127.0.0.1@3000/127.0.0.1 user@example.com/secret-path`
+
+Similarly, to forward a UDP port (5353) from the remote host to local port 8053:
+
+`ssh3 -forward-udp 8053/127.0.0.1@5353/127.0.0.1 user@example.com/secret-path`
+
+
+#### Reverse port forwarding
+
+You can also now perform reverse port forwading to forward a port from localhost to the remote host.
+
+For example, if you want to forward localhost port 3000 to the remote host on port 8080, do this:
+
+`ssh3 -reverse-tcp 8080/127.0.0.1@3000/127.0.0.1 user@example.com/secret-path`
+
+Similarly for UDP:
+
+`ssh3 -reverse-udp 8080/127.0.0.1@3000/127.0.0.1 user@example.com/secret-path`
+
+Warning: Reverse UDP port forwarding is not well tested and may not be working fully.
+
+
