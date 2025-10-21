@@ -14,14 +14,16 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
-	"syscall"
-	"unsafe"
-	"time"
 	"strings"
+	"syscall"
+	"time"
+	"unsafe"
 
-	"golang.org/x/sys/unix"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
+	"golang.org/x/sys/unix"
+
+	"runtime"
 
 	_ "net/http/pprof"
 
@@ -651,7 +653,7 @@ func handleTCPForwardingChannel(ctx context.Context, user *unix_util.User, conv 
 	return nil
 }
 
-//Copied from client.go ForwardTCP()
+// Copied from client.go ForwardTCP()
 func handleTCPReverseForwardingChannel(ctx context.Context, user *unix_util.User, conv *ssh3.Conversation, channel *ssh3.TCPReverseForwardingChannelImpl) error {
 	conn, err := net.ListenTCP("tcp", channel.LocalAddr)
 	if err != nil {
@@ -677,8 +679,6 @@ func handleTCPReverseForwardingChannel(ctx context.Context, user *unix_util.User
 	}()
 	return nil
 }
-
-
 
 // Functions below should be included in a package to avoid reusing them aswell in ssh3-server.go
 
@@ -709,9 +709,6 @@ func ListenUDPReuse(ctx context.Context, network string, laddr *net.UDPAddr) (*n
 	}
 	return uc, nil
 }
-
-
-
 
 // ListenUDPWithAutoMulticast listens on udpAddr.
 // If udpAddr.IP is multicast, it binds to the wildcard address on the same
@@ -751,14 +748,16 @@ func ListenUDPWithAutoMulticast(udpAddr *net.UDPAddr, ifaceName string) (*net.UD
 	var conn *net.UDPConn
 	if conn == nil {
 		//conn, err = net.ListenUDP(network, bind)
-		conn, err = ListenUDPReuse(context.Background(), network, bind)		
+		conn, err = ListenUDPReuse(context.Background(), network, bind)
 		if err != nil {
 			return nil, fmt.Errorf("listen: %w", err)
 		}
 		// Linux: ensure we only receive groups we actually join.
-		if err := disableMulticastAll(conn); err != nil {
-			// consider returning the error; otherwise log loudly
-			return nil, fmt.Errorf("disableMulticastAll: %w", err)
+		if runtime.GOOS == "linux" {
+			if err := disableMulticastAll(conn); err != nil {
+				// consider returning the error; otherwise log loudly
+				return nil, fmt.Errorf("disableMulticastAll: %w", err)
+			}
 		}
 	}
 	// Join group (same join helpers as before)
@@ -769,7 +768,7 @@ func ListenUDPWithAutoMulticast(udpAddr *net.UDPAddr, ifaceName string) (*net.UD
 			conn.Close()
 			return nil, err
 		}
-		
+
 	} else {
 		p := ipv6.NewPacketConn(conn)
 		if err := joinOnInterfacesV6(p, udpAddr, ifaceName); err != nil {
@@ -851,26 +850,28 @@ func joinOnInterfacesV6(p *ipv6.PacketConn, group *net.UDPAddr, ifaceName string
 }
 
 func disableMulticastAll(uc *net.UDPConn) error {
-    rc, err := uc.SyscallConn()
-    if err != nil {
-        return err
-    }
-    var serr error
-    err = rc.Control(func(fd uintptr) {
-        // IP_MULTICAST_ALL = 49 on Linux; use unix.IP_MULTICAST_ALL for portability.
-        if e := unix.SetsockoptInt(int(fd), unix.IPPROTO_IP, unix.IP_MULTICAST_ALL, 0); e != nil {
-            serr = e
-        }
-    })
-    if err != nil {
-        return err
-    }
-    return serr
+	rc, err := uc.SyscallConn()
+	if err != nil {
+		return err
+	}
+	var serr error
+	err = rc.Control(func(fd uintptr) {
+		// IP_MULTICAST_ALL = 49 on Linux; use unix.IP_MULTICAST_ALL for portability.
+		// but this function is only needed on linux, and unix.IP_MULTICAST_ALL does not exist on mac
+		// https://pkg.go.dev/golang.org/x/sys/unix#pkg-constants
+		if e := unix.SetsockoptInt(int(fd), unix.IPPROTO_IP, 0x31, 0); e != nil {
+			serr = e
+		}
+	})
+	if err != nil {
+		return err
+	}
+	return serr
 }
 
-//Copied from client.go ForwardUDP()
+// Copied from client.go ForwardUDP()
 func handleUDPReverseForwardingChannel(ctx context.Context, user *unix_util.User, conv *ssh3.Conversation, ch *ssh3.UDPReverseForwardingChannelImpl) error {
-	conn, err := ListenUDPWithAutoMulticast(ch.LocalAddr,"")
+	conn, err := ListenUDPWithAutoMulticast(ch.LocalAddr, "")
 	//conn, err := net.ListenUDP("udp", ch.LocalAddr)
 	if err != nil {
 		log.Error().Msgf("could not listen on UDP socket: %s", err)
@@ -908,7 +909,7 @@ func handleUDPReverseForwardingChannel(ctx context.Context, user *unix_util.User
 					}
 				}()
 			}
-			
+
 			err = channel.SendDatagram(buf[:n])
 			if err != nil {
 				log.Error().Msgf("could not send datagram: %s", err)
@@ -918,10 +919,6 @@ func handleUDPReverseForwardingChannel(ctx context.Context, user *unix_util.User
 	}()
 	return nil
 }
-
-
-
-
 
 func newDataReq(user *unix_util.User, channel ssh3.Channel, request ssh3Messages.DataOrExtendedDataMessage) error {
 	runningSession, ok := runningSessions.Get(channel)
@@ -1200,9 +1197,9 @@ func ServerMain() int {
 	log.Debug().Msgf("version %s", ssh3.GetCurrentSoftwareVersion())
 
 	quicConf := &quic.Config{
-		Allow0RTT:            false,
-		KeepAlivePeriod:      1 * time.Second,
-		EnableDatagrams:      true,
+		Allow0RTT:             false,
+		KeepAlivePeriod:       1 * time.Second,
+		EnableDatagrams:       true,
 		MaxIncomingStreams:    10000, // client-initiated bidi streams allowed
 		MaxIncomingUniStreams: 10000, // client-initiated uni streams allowed
 	}
