@@ -4,7 +4,7 @@ require (
 	github.com/caddyserver/certmagic v0.20.0
 	github.com/coreos/go-oidc/v3 v3.7.0
 	github.com/creack/pty v1.1.18
-	github.com/golang-jwt/jwt/v5 v5.0.0
+	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/kevinburke/ssh_config v1.2.0
 	github.com/onsi/ginkgo/v2 v2.13.0
 	github.com/onsi/gomega v1.29.0

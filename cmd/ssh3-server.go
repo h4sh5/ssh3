@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/francoismichel/ssh3/client/winsize"
 	"io"
 	"net"
 	"net/http"
@@ -491,7 +492,21 @@ func newSubsystemReq(user *unix_util.User, channel ssh3.Channel, request ssh3Mes
 }
 
 func newWindowChangeReq(user *unix_util.User, channel ssh3.Channel, request ssh3Messages.WindowChangeRequest, wantReply bool) error {
-	return fmt.Errorf("%T not implemented", request)
+	session, ok := runningSessions.Get(channel)
+	if !ok {
+		return fmt.Errorf("cannot find session for current channel")
+	}
+	ws := winsize.WindowSize{
+		NRows:       uint16(request.CharHeight),
+		NCols:       uint16(request.CharWidth),
+		PixelWidth:  uint16(request.PixelWidth),
+		PixelHeight: uint16(request.PixelHeight),
+	}
+	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, session.pty.pty.Fd(), uintptr(syscall.TIOCSWINSZ), uintptr(unsafe.Pointer(&ws)))
+	if errno != 0 {
+		return fmt.Errorf("ioctl failed: %v", errno)
+	}
+	return nil
 }
 
 func newSignalReq(user *unix_util.User, channel ssh3.Channel, request ssh3Messages.SignalRequest, wantReply bool) error {
