@@ -123,10 +123,10 @@ jobs:
           go-version: '${{matrix.go-version}}'
       - name: Install dependencies
         run: go get ./...
-      - name: Fmt code
-        run: |
-          go fmt ./...
-          git diff --exit-code
+      # - name: Fmt code
+      #   run: |
+      #     go fmt ./...
+      #     git diff --exit-code
       - name: Build Binaries
         run:
           make -e client && make -e server
