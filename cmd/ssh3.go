@@ -764,7 +764,7 @@ func ClientMain() int {
 			if p == "" {
 				continue
 			}
-
+			log.Printf("reverseUDP p: %s", p)
 			localIP, localPort, remoteIP, remotePort, err := parseAddrPort(p)
 			if err != nil {
 				log.Error().Msgf("UDP reverse parsing error %s", err)
@@ -825,7 +825,7 @@ func ClientMain() int {
 			if p == "" {
 				continue
 			}
-
+			log.Printf("forwardUDP p: %s", p)
 			localIP, localPort, remoteIP, remotePort, err := parseAddrPort(p)
 			if err != nil {
 				log.Error().Msgf("UDP forwarding parsing error %s", err)
