@@ -1,9 +1,12 @@
-name: Go
+name: Go build and test
 on:
   pull_request:
     paths-ignore:
       - '**/README.md'
   workflow_dispatch:
+  push:
+    branches:
+      - main
 jobs:
   build-linux:
     strategy:
