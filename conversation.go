@@ -365,7 +365,6 @@ func (c *Conversation) OpenUDPReverseForwardingChannel(maxPacketSize uint64, dat
 	return &UDPOpenReverseForwardingChannelImpl{Channel: channel, LocalAddr: localAddr, RemoteAddr: remoteAddr}, nil
 }
 
-
 func (c *Conversation) AcceptChannel(ctx context.Context) (Channel, error) {
 	for {
 		if channel := c.channelsAcceptQueue.Next(); channel != nil {

@@ -95,11 +95,11 @@ func setupQUICConnection(ctx context.Context, skipHostVerification bool, keylog 
 
 	var qconf quic.Config
 
-        qconf.MaxIncomingUniStreams = 10000
-        qconf.MaxIncomingStreams = 10000
-        qconf.Allow0RTT = false
-        qconf.EnableDatagrams = true
-        qconf.KeepAlivePeriod = 1 * time.Second
+	qconf.MaxIncomingUniStreams = 10000
+	qconf.MaxIncomingStreams = 10000
+	qconf.Allow0RTT = false
+	qconf.EnableDatagrams = true
+	qconf.KeepAlivePeriod = 1 * time.Second
 
 	if certs, ok := knownHosts[options.CanonicalHostFormat()]; ok {
 		foundSelfsignedSSH3 := false
@@ -471,9 +471,8 @@ func ClientMain() int {
 	var localTCPAddr *net.TCPAddr = nil
 	var remoteTCPAddr *net.TCPAddr = nil
 
-
-        var fwUDPmulticonn *net.UDPConn
-        fwUDPmulticonn = nil
+	var fwUDPmulticonn *net.UDPConn
+	fwUDPmulticonn = nil
 
 	if *forwardTCP != "" {
 		localIP, localPort, remoteIP, remotePort, err := parseAddrPort(*forwardTCP)
@@ -490,7 +489,7 @@ func ClientMain() int {
 					IP:   localIP.To4(),
 					Port: localPort,
 				}
-			}else{
+			} else {
 				localTCPAddr = &net.TCPAddr{
 					IP:   net.IPv4(127, 0, 0, 1),
 					Port: localPort,
@@ -502,7 +501,7 @@ func ClientMain() int {
 					IP:   localIP.To16(),
 					Port: localPort,
 				}
-			}else{
+			} else {
 				localTCPAddr = &net.TCPAddr{
 					IP:   net.IPv6loopback,
 					Port: localPort,
@@ -529,7 +528,7 @@ func ClientMain() int {
 					IP:   localIP.To4(),
 					Port: localPort,
 				}
-			}else{
+			} else {
 				localTCPAddr = &net.TCPAddr{
 					IP:   net.IPv4(127, 0, 0, 1),
 					Port: localPort,
@@ -541,7 +540,7 @@ func ClientMain() int {
 					IP:   localIP.To16(),
 					Port: localPort,
 				}
-			}else{
+			} else {
 				localTCPAddr = &net.TCPAddr{
 					IP:   net.IPv6loopback,
 					Port: localPort,
@@ -552,7 +551,6 @@ func ClientMain() int {
 			return -1
 		}
 	}
-
 
 	var sshConfig *ssh_config.Config
 	var configBytes []byte
@@ -755,7 +753,6 @@ func ClientMain() int {
 		}
 	}
 
-
 	if *reverseUDP != "" {
 		v := strings.TrimSpace(*reverseUDP)
 		if v == "" {
@@ -767,7 +764,7 @@ func ClientMain() int {
 			if p == "" {
 				continue
 			}
-	
+
 			localIP, localPort, remoteIP, remotePort, err := parseAddrPort(p)
 			if err != nil {
 				log.Error().Msgf("UDP reverse parsing error %s", err)
@@ -794,7 +791,7 @@ func ClientMain() int {
 						IP:   localIP.To16(),
 						Port: localPort,
 					}
-				}else{
+				} else {
 					localUDPAddr = &net.UDPAddr{
 						IP:   net.IPv6loopback,
 						Port: localPort,
@@ -816,7 +813,6 @@ func ClientMain() int {
 
 		}
 	}
-
 
 	if *forwardUDP != "" {
 		v := strings.TrimSpace(*forwardUDP)
@@ -856,7 +852,7 @@ func ClientMain() int {
 						IP:   localIP.To16(),
 						Port: localPort,
 					}
-				}else{
+				} else {
 					localUDPAddr = &net.UDPAddr{
 						IP:   net.IPv6loopback,
 						Port: localPort,
@@ -873,7 +869,7 @@ func ClientMain() int {
 					log.Error().Msgf("could not forward UDP: %s", err)
 					return -1
 				}
-				if localUDPAddr.IP.IsMulticast(){
+				if localUDPAddr.IP.IsMulticast() {
 					fwUDPmulticonn = conn
 				}
 			}

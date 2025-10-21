@@ -147,9 +147,10 @@ type UDPReverseForwardingChannelImpl struct {
 
 type UDPOpenReverseForwardingChannelImpl struct {
 	RemoteAddr *net.UDPAddr
-	LocalAddr *net.UDPAddr
+	LocalAddr  *net.UDPAddr
 	Channel
 }
+
 func buildHeader(conversationStreamID uint64, channelType string, maxPacketSize uint64, additionalBytes []byte) []byte {
 	channelTypeBuf := make([]byte, util.SSHStringLen(channelType))
 	util.WriteSSHString(channelTypeBuf, channelType)
@@ -214,6 +215,7 @@ func buildRequestTCPReverseChannelAdditionalBytes(localAddr net.IP, localPort ui
 	return buf
 
 }
+
 // TODO: Functions buildRequestUDPReverseChannelAdditionalBytes and buildRequestTCPReverseChannelAdditionalBytes are identical!
 func buildRequestUDPReverseChannelAdditionalBytes(localAddr net.IP, localPort uint16, remoteAddr net.IP, remotePort uint16) []byte {
 	var buf []byte
